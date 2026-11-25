@@ -1,0 +1,92 @@
+1. Decorador y parámetros de entrada
+Python
+@app.patch("/users/{id}", response_model=User)
+def modificar_usuario_parcial(id: int, datos: UserPatch):
+@app.patch("/users/{id}"): Responde al método HTTP PATCH, que se usa para modificaciones parciales (a diferencia de PUT, que obliga a enviar el usuario completo).
+
+Dos orígenes de datos distintos: FastAPI combina automáticamente dos fuentes en la misma función:
+
+id: int lo extrae de la URL (/users/2).
+
+datos: UserPatch lo extrae del cuerpo (Body) JSON de la petición, donde todos los campos son opcionales.
+
+2. Búsqueda con enumerate()
+Python
+for posicion, usuario in enumerate(users_list):
+    if usuario.id == id:
+En las rutas GET anteriores bastaba con for usuario in users_list:, porque solo querías leer el objeto. Aquí necesitas sustituirlo dentro de la lista, así que enumerate() te entrega dos variables en cada vuelta:
+
+posicion: el índice en la lista (0, 1, 2...).
+
+usuario: el objeto User en esa posición.
+
+3. Filtrar solo los cambios reales (model_dump)
+Python
+cambios = datos.model_dump(
+    exclude_unset=True,
+    exclude_none=True
+)
+Esta es la parte clave del PATCH. Si el cliente envía únicamente {"age": 25}, el objeto datos (UserPatch) tendrá name=None, surname=None y age=25. Si no filtraras esos None, borrarías el nombre y apellido reales de María:
+
+exclude_unset=True: Descarta cualquier campo que el cliente no haya incluido en el JSON enviado.
+
+exclude_none=True: Descarta también los campos que el cliente haya enviado explícitamente como null, evitando que rompan los campos obligatorios de User.
+
+Con el ejemplo {"age": 25}, la variable cambios será exactamente el diccionario {"age": 25}.
+
+4. Combinar datos antiguos con nuevos y revalidar
+Python
+datos_actualizados = usuario.model_dump()
+datos_actualizados.update(cambios)
+usuario_modificado = User(**datos_actualizados)
+usuario.model_dump(): Convierte al usuario original de la lista en un diccionario: {"id": 2, "name": "María", "surname": "Martínez", "age": 20}.
+
+.update(cambios): Sobrescribe en ese diccionario únicamente las claves que existan en cambios. El diccionario pasa a ser {"id": 2, "name": "María", "surname": "Martínez", "age": 25}.
+
+User(**datos_actualizados): Desempaqueta el diccionario resultante para crear un nuevo objeto User, garantizando que Pydantic vuelva a validar que el objeto final cumple todas las reglas del modelo.
+
+5. Guardar en la lista o devolver 404
+Python
+users_list[posicion] = usuario_modificado
+return usuario_modificado
+Si encuentra el usuario, reemplaza el elemento antiguo en users_list[posicion] por usuario_modificado y lo devuelve como respuesta JSON.
+
+Si el bucle for termina sin haber entrado nunca en el if (no se ejecutó el return), lanza el error 404 Not Found.
+
+// EJERCICIO 09
+Este ejercicio muestra cómo crear un cliente REST en Python mediante la librería requests para consumir tu API de FastAPI desde código, sin necesidad de abrir el navegador ni usar la interfaz /docs.1. Arquitectura: dos programas comunicándose por HTTPPara que este script funcione deben estar ejecutándose dos procesos al mismo tiempo (en dos terminales distintas):El servidor (08_routers/main.py): Permanece encendido escuchando peticiones en [http://127.0.0.1:8000](http://127.0.0.1:8000) y gestionando users_list en su memoria.   El cliente (09_cliente_rest.py): Se ejecuta de principio a fin, envía cuatro peticiones HTTP al servidor, imprime las respuestas por consola y termina.2. Elementos clave de la librería requestsAntes de ver cada petición, conviene entender las herramientas comunes que se repiten en todo el archivo:URL = "[http://127.0.0.1:8000](http://127.0.0.1:8000)": Define la dirección base del servidor para no repetirla en cada llamada.timeout=5: Indica que el cliente esperará como máximo 5 segundos a que el servidor responda. Es una buena práctica obligatoria en clientes HTTP para evitar que el programa se quede bloqueado indefinidamente si el servidor falla o tarda demasiado.respuesta.status_code: Devuelve el código de estado HTTP numérico enviado por FastAPI (por ejemplo, 200 si la consulta fue bien, 201 si se creó un recurso o 404 si no existe).respuesta.json(): Toma el texto en formato JSON que devuelve el servidor y lo convierte automáticamente en estructuras nativas de Python (list o dict) para poder manipularlas en tu código.3. Explicación paso a paso de cada bloqueBloque 1: Listar todos los usuarios (GET /users)Pythonrespuesta = requests.get(f"{URL}/users", timeout=5)
+Qué hace el cliente: Envía una petición GET a [http://127.0.0.1:8000/users](http://127.0.0.1:8000/users).Qué ocurre en el servidor: FastAPI ejecuta obtener_usuarios() en routers/users.py y devuelve users_list serializada como JSON.   Salida: Código HTTP: 200 y una lista de Python con los 3 diccionarios iniciales (Paco, María y Lucía).   Bloque 2: Consultar un usuario concreto (GET /users/2)Pythonrespuesta = requests.get(f"{URL}/users/2", timeout=5)
+Qué hace el cliente: Envía el 2 como parámetro de ruta dentro de la URL.Qué ocurre en el servidor: FastAPI ejecuta obtener_usuario(id=2), encuentra a María y la devuelve.   Salida: Código HTTP: 200 y un único diccionario con los datos de María. (Si previamente hubieras borrado al usuario 2 con un DELETE, aquí recibirías Código HTTP: 404 y {'detail': 'Usuario no encontrado'}).   Bloque 3: Crear un usuario nuevo (POST /users)Pythonnuevo_usuario = {
+    "name": "Laura",
+    "surname": "Gómez",
+    "age": 24
+}
+
+respuesta = requests.post(
+    f"{URL}/users",
+    json=nuevo_usuario,
+    timeout=5
+)
+El parámetro json=nuevo_usuario: Es la pieza más importante de este bloque. Al pasar el diccionario de Python mediante json=... (en lugar de data=...), la librería requests realiza dos tareas automáticamente:Convierte el diccionario de Python a una cadena JSON válida.Añade la cabecera HTTP Content-Type: application/json, indispensable para que FastAPI sepa que debe validar ese cuerpo con el modelo UserCreate.   Qué ocurre en el servidor: FastAPI valida que nuevo_usuario tenga name, surname y age (sin id), le asigna automáticamente el siguiente identificador (4), lo añade a users_list y responde con el código 201 Created.   Salida: Código HTTP: 201 y el diccionario del usuario ya completo: {'name': 'Laura', 'surname': 'Gómez', 'age': 24, 'id': 4}.Bloque 4: Comprobar la persistencia (GET /users final)Pythonrespuesta = requests.get(f"{URL}/users", timeout=5)
+Vuelve a pedir la lista completa para verificar que el POST anterior modificó realmente el estado del servidor: ahora la respuesta incluirá 4 usuarios en lugar de 3. Si ejecutas el script 09_cliente_rest.py una segunda vez sin reiniciar el servidor, creará una segunda Laura con id: 5, mientras que si intentas ejecutarlo con el servidor apagado, Python lanzará una excepción requests.exceptions.ConnectionError.
+
+
+// EJERCICIO 10
+Detalles clave del código del servidor:
+
+socket.AF_INET y socket.SOCK_STREAM: El primer argumento indica que se usará IPv4 (127.0.0.1) y el segundo especifica que el protocolo de transporte será TCP (fiable y orientado a conexión, frente a SOCK_DGRAM que sería UDP).
+
+with ... as servidor: y with conexion:: socket.socket implementa el protocolo de gestor de contexto de Python; garantiza que socket.close() se ejecute siempre al terminar el bloque, liberando el puerto 5001 incluso si ocurre un error.
+
+conexion.recv(1024): Lee del búfer de red hasta un máximo de 1024 bytes en una sola lectura.
+
+conexion.sendall(...): A diferencia de send() (que podría enviar solo una parte de los bytes si el búfer está lleno), sendall() asegura que se transmitan todos los bytes del mensaje completo.
+
+Comentarios finales (getsockname vs getpeername): Sirven para comprobar que tanto servidor como conexion tienen como dirección local ('127.0.0.1', 5001) (getsockname()), mientras que conexion.getpeername() muestra la IP y el puerto aleatorio asignado por el sistema operativo al cliente conectado.
+
+
+Detalles clave del código del cliente:
+
+cliente.connect((HOST, PUERTO)): No necesita llamar a bind() ni a listen(); el sistema operativo le asigna automáticamente un puerto local libre (epímero) y establece la conexión contra el servidor. Si intentas ejecutar cliente.py sin haber arrancado antes servidor.py, Python lanzará ConnectionRefusedError.
+
+Sincronización bloqueo-respuesta: Tras ejecutar cliente.sendall(...), la línea datos = cliente.recv(1024) detiene la ejecución del cliente hasta que llegan los bytes de vuelta desde servidor.py. Si escribes ping o PING, recibirás PONG; si escribes Hola, recibirás Has enviado: Hola.

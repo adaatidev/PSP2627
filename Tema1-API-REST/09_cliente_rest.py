@@ -1,4 +1,3 @@
-
 # TEMA 1 - API REST
 # Ejemplo 09: Cliente REST con requests
 #
@@ -45,17 +44,9 @@ print("Usuario:", respuesta.json())
 
 # POST http://127.0.0.1:8000/users
 
-nuevo_usuario = {
-    "name": "Laura",
-    "surname": "Gómez",
-    "age": 24
-}
+nuevo_usuario = {"name": "Laura", "surname": "Gómez", "age": 24}
 
-respuesta = requests.post(
-    f"{URL}/users",
-    json=nuevo_usuario,
-    timeout=5
-)
+respuesta = requests.post(f"{URL}/users", json=nuevo_usuario, timeout=5)
 
 print("\nPOST /users")
 print("Código HTTP:", respuesta.status_code)
