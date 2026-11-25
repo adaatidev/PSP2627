@@ -1,5 +1,4 @@
-PRUEBAS REALIZADAS - TRES EN RAYA TCP
-=====================================
+PRUEBAS REALIZADAS - TRES EN RAYA TCP (todo bien :D)
 
 1. Ejecución en el mismo equipo:
    - Terminal 1: python servidor.py
@@ -7,10 +6,10 @@ PRUEBAS REALIZADAS - TRES EN RAYA TCP
    (Para jugar en dos equipos distintos en la misma red, se consulta la IPv4 del servidor
     con 'ipconfig' y se sustituye HOST = "127.0.0.1" en cliente.py por esa IP).
 
-2. Casos comprobados:
+2. Casos que he comprobado:
    - Conexión correcta entre servidor (X) y cliente (O).
    - Primer turno asignado automáticamente al servidor (X).
-   - Rechazo de coordenadas fuera de rango (ej. fila 0 o columna 4) sin perder el turno.
+   - Rechazo de coordenadas fuera del rango (ej. fila 0 o columna 4) sin perder el turno.
    - Rechazo de casillas ya ocupadas sin perder el turno.
    - Victoria horizontal, vertical y diagonal detectadas en ambas consolas.
    - Empate al llenar las 9 casillas sin ganador.
