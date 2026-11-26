@@ -90,3 +90,54 @@ Detalles clave del código del cliente:
 cliente.connect((HOST, PUERTO)): No necesita llamar a bind() ni a listen(); el sistema operativo le asigna automáticamente un puerto local libre (epímero) y establece la conexión contra el servidor. Si intentas ejecutar cliente.py sin haber arrancado antes servidor.py, Python lanzará ConnectionRefusedError.
 
 Sincronización bloqueo-respuesta: Tras ejecutar cliente.sendall(...), la línea datos = cliente.recv(1024) detiene la ejecución del cliente hasta que llegan los bytes de vuelta desde servidor.py. Si escribes ping o PING, recibirás PONG; si escribes Hola, recibirás Has enviado: Hola.
+
+// EJERCICIO 8
+1. Aislar solo los cambios realesPythoncambios = datos.model_dump(
+    exclude_unset=True,
+    exclude_none=True
+)
+   Cuando FastAPI recibe {"age": 25} en el parámetro datos (UserPatch), rellena automáticamente los campos no enviados con None (name=None, surname=None, age=25). El método .model_dump() convierte ese objeto Pydantic en un diccionario de Python aplicando dos filtros:   exclude_unset=True: Ignora cualquier atributo que el cliente no escribió en el JSON (name y surname quedan fuera).exclude_none=True: Ignora cualquier atributo que el cliente haya enviado explícitamente como null ({"name": null}), evitando que se borren datos obligatorios.Resultado en memoria: cambios es exactamente {"age": 25}.2. Convertir el usuario original a diccionarioPythondatos_actualizados = usuario.model_dump()
+   Como los objetos Pydantic son estructuras validadas que no tienen un método .update() directo como los diccionarios, convertimos el usuario original que estaba en la lista a un diccionario estándar de Python.   Resultado en memoria: datos_actualizados es {"id": 2, "name": "María", "surname": "Martínez", "age": 20}.   3. Sobrescribir únicamente las claves modificadasPythondatos_actualizados.update(cambios)
+   El método .update() de los diccionarios de Python mezcla ambos diccionarios: si una clave de cambios ya existe en datos_actualizados, sustituye su valor; todas las demás claves se quedan intactas.   Resultado en memoria: datos_actualizados pasa a ser {"id": 2, "name": "María", "surname": "Martínez", "age": 25}.4. Reconstruir y revalidar el objeto UserPythonusuario_modificado = User(
+    **datos_actualizados
+)
+   Los dos asteriscos (**) desempaquetan el diccionario y pasan cada par clave-valor como argumento con nombre al constructor: User(id=2, name="María", surname="Martínez", age=25).Al instanciar de nuevo la clase User, Pydantic vuelve a ejecutar todas las comprobaciones de tipos y reglas de Field (por ejemplo, que age siga estando entre 0 y 120) antes de guardar usuario_modificado en users_list.
+
+//  CLASE ELFO CON ENUM
+Cómo aplicarlo en routers/elfs.py
+Python
+from enum import Enum
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+router = APIRouter()
+
+
+class Turn(str, Enum):
+    MORNING = "morning"
+    AFTERNOON = "afternoon"
+    NIGHT = "night"
+
+
+class Elf(BaseModel):
+    id: int
+    name: str
+    turn: Turn
+    manufactured_toys: int = Field(ge=0)
+
+
+elfs_list = [
+    Elf(id=1, name="Name1", turn=Turn.MORNING, manufactured_toys=10),
+    Elf(id=2, name="Name2", turn=Turn.AFTERNOON, manufactured_toys=65),
+    Elf(id=3, name="Name3", turn=Turn.NIGHT, manufactured_toys=40),
+]
+Detalles clave a tener en cuenta
+Doble herencia (str, Enum): Es imprescindible heredar de str además de Enum. Si solo heredas de Enum, Pydantic y Swagger no lo tratarán como una cadena JSON estándar.
+
+Uso en endpoints (también sirve en filtros): Si creas un endpoint para filtrar por turno, puedes usar Turn como tipo del parámetro y en /docs también te saldrá el desplegable:
+
+Python
+@router.get("/by-turn")
+def get_elfs_by_turn(turn: Turn):
+    return [elf for elf in elfs_list if elf.turn == turn]
+Comparaciones y creación: Al crear los objetos iniciales en elfs_list, puedes usar Turn.MORNING (más limpio y con autocompletado) o directamente el texto "morning", ya que Pydantic lo convertirá al Enum automáticamente.
