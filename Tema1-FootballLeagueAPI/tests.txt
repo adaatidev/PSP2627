@@ -1,0 +1,10 @@
+Why would a football league need communication between applications?
+    A football league needs communication between applications because it has to know the teams and their players in their database.
+
+Which application is the client and which is the server?
+    In this case, the client is teams.py and the server is players.py
+
+What is the difference between PUT and PATCH?
+    The difference between put and patch are that put updates, for example, player but it doesn't change their id, because put needs 
+    it to know who is going to update. While patch updates parcially an object, for example, player, it doesn't have to change all 
+    the variables it can just change their age or their name (patch also needs the id to know who is going to update).
